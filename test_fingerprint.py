@@ -1,4 +1,6 @@
 import hashlib
+import subprocess
+import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest import TestCase
@@ -32,3 +34,20 @@ class FingerprintTests(TestCase):
             path.write_text('{"file": "wrong"}', encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "SHA-256"):
                 read_manifest(path)
+
+    def test_snapshot_output_round_trips_and_stays_outside_root(self):
+        script = Path(__file__).with_name("fingerprint.py")
+
+        def run(*args):
+            return subprocess.run([sys.executable, str(script), *args], capture_output=True).returncode
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory) / "files"
+            root.mkdir()
+            (root / "naïve.txt").write_bytes(b"data")
+            manifest = Path(directory) / "manifest.json"
+            self.assertEqual(run("snapshot", str(root), "--output", str(manifest)), 0)
+            self.assertEqual(read_manifest(manifest), snapshot(root))
+            self.assertEqual(run("check", str(root), str(manifest)), 0)
+            self.assertEqual(run("snapshot", str(root), "--output", str(root / "inside.json")), 2)
+            self.assertFalse((root / "inside.json").exists())

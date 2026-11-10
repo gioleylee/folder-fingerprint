@@ -54,14 +54,22 @@ def compare(expected, actual):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
-    commands.add_parser("snapshot").add_argument("root", type=Path)
+    record = commands.add_parser("snapshot")
+    record.add_argument("root", type=Path)
+    record.add_argument("--output", type=Path, help="write the manifest to this file as UTF-8 instead of stdout")
     check = commands.add_parser("check")
     check.add_argument("root", type=Path)
     check.add_argument("manifest", type=Path)
     args = parser.parse_args()
     try:
         if args.command == "snapshot":
-            print(json.dumps(snapshot(args.root), indent=2, sort_keys=True))
+            manifest = json.dumps(snapshot(args.root), indent=2, sort_keys=True) + "\n"
+            if args.output is None:
+                print(manifest, end="")
+            else:
+                if args.output.resolve().is_relative_to(args.root.resolve()):
+                    raise ValueError("store the manifest outside the scanned directory")
+                args.output.write_text(manifest, encoding="utf-8", newline="\n")
             return 0
         report = compare(read_manifest(args.manifest), snapshot(args.root))
     except (OSError, ValueError) as error:
